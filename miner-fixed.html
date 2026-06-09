@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OpenMining V2 — ETH Terminal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+<!-- FIX JS-1: Correct ethers.js v6 CDN (was pointing to cloudflare.com homepage) -->
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080B12; --surface:#0E1420; --surface2:#141C2C;
+  --border:rgba(255,255,255,0.07);
+  --teal:#00E5CC; --teal-dim:rgba(0,229,204,0.12);
+  --amber:#F5A623; --amber-dim:rgba(245,166,35,0.12);
+  --red:#FF4D6A; --red-dim:rgba(255,77,106,0.12);
+  --green:#00C98D; --text:#E8EDF5; --text-dim:#6B7A94; --text-mid:#9BA8BE;
+  --mono:'JetBrains Mono',monospace; --sans:'Inter',sans-serif;
+  --r:10px; --r-lg:16px;
+}
+html{font-size:15px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:4px}
+
+/* ── Layout ── */
+.app{display:flex;min-height:100vh}
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.logo{padding:24px 20px 18px;border-bottom:1px solid var(--border)}
+.logo-name{font-weight:700;font-size:1rem;color:var(--text)}
+.logo-ver{font-size:0.68rem;color:var(--text-dim);font-family:var(--mono);margin-top:2px}
+.nav{padding:14px 10px;flex:1}
+.nav-label{font-size:0.62rem;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-dim);padding:0 12px;margin:14px 0 5px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:0.84rem;font-weight:500;color:var(--text-mid);transition:all 0.15s;border:1px solid transparent;margin-bottom:2px}
+.nav-item:hover{background:var(--surface2);color:var(--text)}
+.nav-item.active{background:var(--teal-dim);border-color:rgba(0,229,204,0.2);color:var(--teal)}
+.nav-icon{width:15px;height:15px;flex-shrink:0}
+.sidebar-footer{padding:14px;border-top:1px solid var(--border)}
+.wallet-pill{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:9px;cursor:pointer;transition:border-color 0.15s}
+.wallet-pill:hover{border-color:rgba(0,229,204,0.3)}
+.wallet-dot{width:8px;height:8px;border-radius:50%;background:#6B7A94;flex-shrink:0;transition:all 0.3s}
+.wallet-addr{font-family:var(--mono);font-size:0.7rem;color:var(--text-mid)}
+
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;padding:28px 32px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+.page-title{font-size:1.4rem;font-weight:700;letter-spacing:-0.4px}
+.page-title span{color:var(--teal)}
+.page-sub{font-size:0.75rem;color:var(--text-dim);margin-top:2px}
+.topbar-right{display:flex;gap:10px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:0.83rem;font-weight:600;cursor:pointer;border:none;transition:all 0.15s;font-family:var(--sans)}
+.btn-primary{background:var(--teal);color:#060d14}.btn-primary:hover{background:#00cdb7;box-shadow:0 0 16px rgba(0,229,204,0.3)}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border)}.btn-ghost:hover{border-color:rgba(0,229,204,0.3);color:var(--teal)}
+.btn-amber{background:var(--amber);color:#1a0c00}.btn-amber:hover{background:#e09520}
+.btn-red{background:var(--red);color:#fff}
+.btn-sm{padding:6px 12px;font-size:0.75rem}
+.btn-full{width:100%;justify-content:center}
+
+/* ── Cards ── */
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:22px;margin-bottom:18px}
+.panel:last-child{margin-bottom:0}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;position:relative;overflow:hidden;transition:border-color 0.15s}
+.stat-card:hover{border-color:rgba(0,229,204,0.18)}
+.stat-card::after{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--teal);border-radius:4px 0 0 4px;opacity:0.5}
+.stat-card.amber::after{background:var(--amber)}.stat-card.green::after{background:var(--green)}.stat-card.red::after{background:var(--red)}
+.stat-eyebrow{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px}
+.stat-value{font-family:var(--mono);font-size:1.25rem;font-weight:700;color:var(--text);line-height:1;margin-bottom:3px}
+.stat-delta{font-size:0.72rem;color:var(--text-dim)}
+.stat-delta.up{color:var(--green)}
+
+/* ── Grid helpers ── */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.grid-main{display:grid;grid-template-columns:1fr 340px;gap:18px}
+
+/* ── Treasury ring ── */
+.treasury-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:24px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden}
+.treasury-card::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(0,229,204,0.06),transparent 60%);pointer-events:none}
+.ring-wrap{position:relative;width:150px;height:150px;margin:10px auto 18px}
+.ring-svg{width:150px;height:150px;transform:rotate(-90deg)}
+.ring-track{fill:none;stroke:var(--surface2);stroke-width:10}
+.ring-fill{fill:none;stroke-width:10;stroke-linecap:round;stroke:var(--teal);stroke-dasharray:408;stroke-dashoffset:82;transition:stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1),stroke 0.4s;filter:drop-shadow(0 0 5px var(--teal))}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.ring-pct{font-family:var(--mono);font-size:1.8rem;font-weight:700;color:var(--teal);line-height:1}
+.ring-sub{font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px}
+.treasury-label{font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:3px}
+.treasury-val{font-family:var(--mono);font-size:1.3rem;font-weight:700;margin-bottom:14px}
+
+/* ── Badge ── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:0.68rem;font-weight:600;letter-spacing:0.3px}
+.badge-teal{background:var(--teal-dim);color:var(--teal);border:1px solid rgba(0,229,204,0.2)}
+.badge-amber{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,166,35,0.2)}
+.badge-green{background:rgba(0,201,141,0.12);color:var(--green);border:1px solid rgba(0,201,141,0.2)}
+.badge-red{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,77,106,0.2)}
+.badge-dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+/* ── Input ── */
+.input-group{margin-bottom:12px}
+.input-label{font-size:0.72rem;font-weight:600;color:var(--text-dim);margin-bottom:5px;display:block;letter-spacing:0.3px}
+.input-wrap{position:relative}
+.input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 13px;font-size:0.85rem;color:var(--text);font-family:var(--sans);outline:none;transition:border-color 0.15s}
+.input:focus{border-color:rgba(0,229,204,0.45)}
+.input-suffix{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)}
+
+/* ── Type card ── */
+.type-card{border:2px solid var(--border);border-radius:var(--r);padding:13px;cursor:pointer;transition:all 0.15s;position:relative}
+.type-card:hover{border-color:rgba(0,229,204,0.3)}
+.type-card.selected{border-color:var(--teal);background:var(--teal-dim)}
+.type-card-name{font-weight:700;font-size:0.88rem;margin-bottom:2px}
+.type-card-fee{font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)}
+
+/* ── ES grid ── */
+.es-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin:12px 0}
+.es-slot{aspect-ratio:1;border-radius:6px;border:1px solid var(--border);background:var(--surface2);display:grid;place-items:center;font-family:var(--mono);font-size:0.62rem;color:var(--text-dim);transition:all 0.15s}
+.es-slot.active{background:var(--teal-dim);border-color:rgba(0,229,204,0.35);color:var(--teal)}
+
+/* ── Progress ── */
+.progress-track{height:6px;background:var(--surface2);border-radius:4px;overflow:hidden;margin:8px 0}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--teal),#0090FF);border-radius:4px;transition:width 0.8s ease}
+
+/* ── Section head ── */
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.section-title{font-size:0.88rem;font-weight:600}
+.section-meta{font-size:0.72rem;color:var(--text-dim)}
+.divider{height:1px;background:var(--border);margin:14px 0}
+
+/* ── Table ── */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{font-size:0.65rem;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--text-dim);padding:0 10px 9px;text-align:left;white-space:nowrap}
+td{padding:11px 10px;font-size:0.8rem;border-top:1px solid var(--border);color:var(--text-mid)}
+tr:hover td{background:rgba(255,255,255,0.012)}
+.td-mono{font-family:var(--mono);font-size:0.76rem}
+.td-addr{font-family:var(--mono);font-size:0.68rem;color:var(--text-dim)}
+
+/* ── Banner ── */
+.banner{padding:11px 18px;border-radius:var(--r);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.banner-warn{background:rgba(245,166,35,0.1);border:1px solid rgba(245,166,35,0.25);color:var(--amber);font-size:0.82rem;font-weight:500}
+
+/* ── Toast ── */
+.toast-wrap{position:fixed;bottom:22px;right:22px;display:flex;flex-direction:column;gap:7px;z-index:200;pointer-events:none}
+.toast{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px 15px;display:flex;align-items:center;gap:9px;font-size:0.8rem;max-width:290px;pointer-events:all;animation:slide-in 0.2s ease;box-shadow:0 6px 24px rgba(0,0,0,0.4)}
+.toast.success{border-left:3px solid var(--green)}.toast.warn{border-left:3px solid var(--amber)}.toast.error{border-left:3px solid var(--red)}
+@keyframes slide-in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;place-items:center;z-index:300;backdrop-filter:blur(3px)}
+.overlay.open{display:grid}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:26px;width:100%;max-width:400px;animation:modal-in 0.2s ease}
+@keyframes modal-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.modal-title{font-size:1.05rem;font-weight:700;margin-bottom:3px}
+.modal-sub{font-size:0.78rem;color:var(--text-dim);margin-bottom:18px}
+.modal-close{float:right;cursor:pointer;background:none;border:none;font-size:1.1rem;color:var(--text-dim)}
+.modal-close:hover{color:var(--text)}
+
+/* ── Loading spinner ── */
+.spinner{width:16px;height:16px;border:2px solid rgba(0,229,204,0.3);border-top-color:var(--teal);border-radius:50%;animation:spin 0.7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Responsive ── */
+@media(max-width:1000px){.grid-main{grid-template-columns:1fr}.grid-4{grid-template-columns:1fr 1fr}.sidebar{width:200px}}
+@media(max-width:700px){.sidebar{display:none}.main{padding:18px 14px}.grid-3{grid-template-columns:1fr 1fr}.grid-4{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="logo-name">⛏ OpenMining</div>
+    <div class="logo-ver">V2 • SEPOLIA (ETH)</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-label">Overview</div>
+    <div class="nav-item active" onclick="showTab('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showTab('mining',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Mining
+    </div>
+    <div class="nav-item" onclick="showTab('rewards',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      Rewards
+    </div>
+    <div class="nav-label">Account</div>
+    <div class="nav-item" onclick="showTab('register',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Register
+    </div>
+    <div class="nav-item" onclick="showTab('deposit',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Deposit
+    </div>
+    <div class="nav-item" onclick="showTab('energy',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Energy Boost
+    </div>
+    <div class="nav-item" onclick="showTab('licenses',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Licenses
+    </div>
+    <div class="nav-item" onclick="showTab('bounty',this)">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Bounty Hunter
+      <span class="badge badge-amber" style="margin-left:auto;font-size:0.58rem;padding:2px 5px">10%</span>
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="wallet-pill" onclick="connectWallet()">
+      <div class="wallet-dot" id="walletDot"></div>
+      <div class="wallet-addr" id="walletAddr">Connect Wallet</div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+<main class="main">
+
+  <!-- Protection Banner -->
+  <div class="banner banner-warn" id="protectionBanner" style="display:none">
+    ⚠ Treasury Protection Mode Active — deposits &amp; withdrawals paused
+    <span class="badge badge-amber">PROTECTION</span>
+  </div>
+
+  <!-- ── DASHBOARD ── -->
+  <div id="tab-dashboard">
+    <div class="topbar">
+      <div><div class="page-title">Mining <span>Terminal</span></div><div class="page-sub">Real-time ETH mining on Sepolia</div></div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost" onclick="refreshData()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary" onclick="showTab('deposit',null)">+ Deposit</button>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:18px;margin-bottom:18px">
+      <div class="treasury-card">
+        <div style="font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;align-self:flex-start">Treasury Health</div>
+        <div class="ring-wrap">
+          <svg class="ring-svg" viewBox="0 0 160 160">
+            <circle class="ring-track" cx="80" cy="80" r="65"/>
+            <circle class="ring-fill" id="ringFill" cx="80" cy="80" r="65"/>
+          </svg>
+          <div class="ring-center">
+            <div class="ring-pct" id="ringPct">—</div>
+            <div class="ring-sub">Coverage</div>
+          </div>
+        </div>
+        <div class="treasury-label">Treasury Balance</div>
+        <div class="treasury-val" id="treasuryBal">— ETH</div>
+        <span class="badge badge-green" id="systemStatus"><span class="badge-dot"></span> HEALTHY</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div class="grid-3">
+          <div class="stat-card"><div class="stat-eyebrow">Mining Balance</div><div class="stat-value" id="statMining">—</div><div class="stat-delta">ETH staked</div></div>
+          <div class="stat-card amber"><div class="stat-eyebrow">Reward Balance</div><div class="stat-value" id="statRewards">—</div><div class="stat-delta up">withdrawable</div></div>
+          <div class="stat-card green"><div class="stat-eyebrow">Daily Rate</div><div class="stat-value" id="statRate">—</div><div class="stat-delta">base + ES + license</div></div>
+        </div>
+        <div class="grid-3">
+          <div class="stat-card"><div class="stat-eyebrow">ES Slots</div><div class="stat-value" id="statES">—</div><div class="stat-delta">energy boosts</div></div>
+          <div class="stat-card"><div class="stat-eyebrow">Referrals</div><div class="stat-value" id="statRefs">—</div><div class="stat-delta">direct sponsored</div></div>
+          <div class="stat-card"><div class="stat-eyebrow">Total Earned</div><div class="stat-value" id="statEarned">—</div><div class="stat-delta">lifetime ETH</div></div>
+        </div>
+        <div class="panel" style="margin-bottom:0;padding:16px 18px">
+          <div class="section-head"><span class="section-title">Mining Cap Progress</span><span class="section-meta" id="capMeta">—</span></div>
+          <div class="progress-track"><div class="progress-fill" id="capProgress" style="width:0%"></div></div>
+          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:4px">Cap at 200% of mining balance. Top up to extend.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="section-head"><span class="section-title">Account Overview</span><span id="acctTypeBadge"></span></div>
+      <div class="grid-3" style="gap:10px">
+        <div style="background:var(--surface2);padding:13px;border-radius:8px">
+          <div class="stat-eyebrow" style="margin-bottom:4px">Pro License</div>
+          <div class="td-mono" style="font-size:0.9rem" id="proStatus">—</div>
+        </div>
+        <div style="background:var(--surface2);padding:13px;border-radius:8px">
+          <div class="stat-eyebrow" style="margin-bottom:4px">Premium License</div>
+          <div class="td-mono" style="font-size:0.9rem" id="premiumStatus">—</div>
+        </div>
+        <div style="background:var(--surface2);padding:13px;border-radius:8px">
+          <div class="stat-eyebrow" style="margin-bottom:4px">Referrer</div>
+          <div class="td-addr" id="referrerAddr">—</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── MINING ── -->
+  <div id="tab-mining" style="display:none">
+    <div class="topbar">
+      <div><div class="page-title">Mining <span>Engine</span></div><div class="page-sub">Your active miner configuration</div></div>
+      <div class="topbar-right"><button class="btn btn-primary" onclick="doClaimRewards()">Claim Rewards</button></div>
+    </div>
+    <div class="grid-main">
+      <div>
+        <div class="panel">
+          <div class="section-head"><span class="section-title">Daily Mining Rate</span><span class="badge badge-teal" id="miningBadge">MINER100</span></div>
+          <div class="progress-track" style="height:8px;margin:12px 0"><div class="progress-fill" id="rateBar" style="width:10%"></div></div>
+          <div class="grid-3" style="gap:10px;margin-top:12px">
+            <div style="background:var(--surface2);padding:12px;border-radius:8px"><div class="stat-eyebrow">Base Rate</div><div class="td-mono" style="font-size:1rem;color:var(--text);margin-top:3px">0.10% / day</div></div>
+            <div style="background:var(--surface2);padding:12px;border-radius:8px"><div class="stat-eyebrow">ES Bonus</div><div class="td-mono" style="font-size:1rem;color:var(--teal);margin-top:3px" id="esBonusLabel">+0.00%</div></div>
+            <div style="background:var(--surface2);padding:12px;border-radius:8px"><div class="stat-eyebrow">License Bonus</div><div class="td-mono" style="font-size:1rem;color:var(--amber);margin-top:3px" id="licBonusLabel">+0.00%</div></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="section-head"><span class="section-title">Energy Speed Slots</span><span class="section-meta">Each +0.10% daily</span></div>
+          <div class="es-grid" id="esGrid"></div>
+          <div style="font-size:0.72rem;color:var(--text-dim)">Buy more slots in the Energy Boost tab</div>
+        </div>
+        <div class="panel" style="background:linear-gradient(135deg,rgba(0,229,204,0.04),var(--surface))">
+          <div class="section-head"><span class="section-title">Claimable Balance</span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px;background:var(--surface2);border-radius:8px;margin-bottom:12px">
+            <div>
+              <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:3px">AVAILABLE TO WITHDRAW</div>
+              <div style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:var(--teal)" id="claimableAmt">0.0000 ETH</div>
+            </div>
+            <button class="btn btn-primary" onclick="doClaimRewards()">Withdraw All</button>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-dim)">4% mining tax applied on accrual. 0.0001 ETH withdrawal fee per transaction.</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="panel">
+          <div class="section-title" style="margin-bottom:12px">Mining Summary</div>
+          <div style="display:flex;flex-direction:column;gap:9px;font-size:0.82rem">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Mining Balance</span><span class="td-mono" id="sumMining">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Cap (200%)</span><span class="td-mono" id="sumCap">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Total Earned</span><span class="td-mono" style="color:var(--green)" id="sumEarned">—</span></div>
+            <div class="divider"></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Pro License</span><span id="sumPro">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Premium License</span><span id="sumPremium">—</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="section-title" style="margin-bottom:10px">Withdraw Rewards</div>
+          <div class="input-group">
+            <label class="input-label">Amount (ETH)</label>
+            <div class="input-wrap"><input class="input" id="mineWithdrawAmt" type="number" step="0.0001" placeholder="0.0000"/><span class="input-suffix">ETH</span></div>
+          </div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:10px">Fee: 0.0001 ETH deducted from your reward balance</div>
+          <button class="btn btn-primary btn-full" onclick="doWithdrawFromInput('mineWithdrawAmt')">Withdraw</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REWARDS ── -->
+  <div id="tab-rewards" style="display:none">
+    <div class="topbar"><div><div class="page-title">Reward <span>Wallet</span></div></div></div>
+    <div class="grid-main">
+      <div class="panel">
+        <div style="text-align:center;padding:20px 0">
+          <div style="font-size:0.72rem;color:var(--text-dim);margin-bottom:5px">REWARD BALANCE</div>
+          <div style="font-family:var(--mono);font-size:2.4rem;font-weight:700;color:var(--teal)" id="rewardBig">—</div>
+          <div style="font-size:0.8rem;color:var(--text-dim)">ETH</div>
+        </div>
+        <div class="divider"></div>
+        <div class="input-group" style="margin-top:14px">
+          <label class="input-label">Withdraw Amount (ETH)</label>
+          <div class="input-wrap"><input class="input" id="withdrawAmt" type="number" step="0.0001" placeholder="0.0000"/><span class="input-suffix">ETH</span></div>
+        </div>
+        <div style="background:var(--surface2);padding:10px 12px;border-radius:8px;font-size:0.75rem;margin-bottom:12px;display:flex;justify-content:space-between">
+          <span style="color:var(--text-dim)">You receive</span>
+          <span style="color:var(--teal);font-family:var(--mono)" id="withdrawNet">—</span>
+          <span style="color:var(--amber)">Fee: 0.0001 ETH</span>
+        </div>
+        <button class="btn btn-primary btn-full" onclick="doWithdrawFromInput('withdrawAmt')">Withdraw to Wallet</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="panel">
+          <div class="section-title" style="margin-bottom:4px">P2P Transfer</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px">Transfer reward balance to another wallet (no withdrawal fee)</div>
+          <div class="input-group"><label class="input-label">Recipient Address</label><input class="input" id="p2pAddr" placeholder="0x..."/></div>
+          <div class="input-group"><label class="input-label">Amount (ETH)</label><div class="input-wrap"><input class="input" id="p2pAmt" type="number" step="0.0001" placeholder="0.0000"/><span class="input-suffix">ETH</span></div></div>
+          <button class="btn btn-ghost btn-full" onclick="doP2P()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REGISTER ── -->
+  <div id="tab-register" style="display:none">
+    <div class="topbar"><div><div class="page-title">Create <span>Account</span></div></div></div>
+    <div style="max-width:460px">
+      <div class="panel">
+        <div class="section-title" style="margin-bottom:4px">Choose Account Type</div>
+        <div style="font-size:0.76rem;color:var(--text-dim);margin-bottom:13px">Both cost 0.001 ETH for testing</div>
+        <div class="grid-2" style="margin-bottom:14px">
+          <div class="type-card" id="typeOpenMining" onclick="selectType('OpenMining')">
+            <div class="type-card-name">Open Mining</div>
+            <div class="type-card-fee">0.001 ETH</div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:5px">Earn 5% bounty on referral registrations. No daily mining.</div>
+          </div>
+          <div class="type-card selected" id="typeMiner" onclick="selectType('Miner100')">
+            <div class="type-card-name">Miner100</div>
+            <div class="type-card-fee">0.001 ETH</div>
+            <div style="font-size:0.7rem;color:var(--text-dim);margin-top:5px">Mine 0.10%+ daily + 10% bounty on referral deposits.</div>
+          </div>
+        </div>
+        <div class="input-group"><label class="input-label">Referrer Address (optional)</label><input class="input" id="regRef" placeholder="0x... or leave blank"/></div>
+        <button class="btn btn-primary btn-full" onclick="doRegister()">Register (0.001 ETH)</button>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:9px;text-align:center">Make sure MetaMask is on Sepolia testnet</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DEPOSIT ── -->
+  <div id="tab-deposit" style="display:none">
+    <div class="topbar"><div><div class="page-title">Add <span>Mining Balance</span></div></div></div>
+    <div style="max-width:460px">
+      <div class="panel">
+        <div class="section-title" style="margin-bottom:4px">Deposit ETH</div>
+        <div style="font-size:0.76rem;color:var(--text-dim);margin-bottom:14px">Increases your mining balance. Only available to Miner100 accounts.</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:13px;margin-bottom:14px">
+          <div style="font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:9px">Allocation Breakdown</div>
+          <div style="display:flex;flex-direction:column;gap:7px;font-size:0.78rem">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Your Mining Balance (~75%)</span><span style="color:var(--teal)" id="alloc75">—</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Sponsor Bounty (10%)</span><span id="alloc10">—</span></div>
+          </div>
+        </div>
+        <div class="input-group"><label class="input-label">Amount (ETH)</label><div class="input-wrap"><input class="input" id="depositAmt" type="number" step="0.001" value="0.001" oninput="updateDepositAlloc()"/><span class="input-suffix">ETH</span></div></div>
+        <div style="font-size:0.7rem;color:var(--text-dim);margin-bottom:12px">Minimum: 0.001 ETH. Requires Miner100 account.</div>
+        <button class="btn btn-primary btn-full" onclick="doDeposit()">Send ETH</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ENERGY BOOST ── -->
+  <div id="tab-energy" style="display:none">
+    <div class="topbar"><div><div class="page-title">Energy <span>Speed</span></div></div></div>
+    <div style="max-width:460px">
+      <div class="panel">
+        <div class="section-title" style="margin-bottom:4px">Buy Energy Slots</div>
+        <div style="font-size:0.76rem;color:var(--text-dim);margin-bottom:14px">Each slot adds +0.10% to your daily mining rate. Cost: 0.001 ETH each.</div>
+        <div style="background:var(--surface2);border-radius:8px;padding:13px;margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.8rem"><span style="color:var(--text-dim)">Current Slots</span><span class="td-mono" id="esCurrentCount">—</span></div>
+          <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:0.8rem"><span style="color:var(--text-dim)">Max Slots</span><span class="td-mono">5</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:var(--text-dim)">Current Boost</span><span class="td-mono" style="color:var(--teal)" id="esBoostCurrent">+0.00%</span></div>
+        </div>
+        <div class="es-grid" id="esGridEnergy"></div>
+        <button class="btn btn-amber btn-full" onclick="doBuyES()">Buy 1 Energy Slot (0.001 ETH)</button>
+        <div style="font-size:0.68rem;color:var(--text-dim);margin-top:8px;text-align:center">Each purchase adds 1 slot. Max 5 slots total.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LICENSES ── -->
+  <div id="tab-licenses" style="display:none">
+    <div class="topbar"><div><div class="page-title">Mining <span>Licenses</span></div></div></div>
+    <div class="grid-2" style="max-width:700px;gap:16px">
+      <div class="panel" style="border-color:rgba(0,229,204,0.2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="section-title">Pro License</div>
+          <span class="badge badge-teal" id="proBadge">INACTIVE</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px;line-height:1.6">
+          ✓ +0.10% daily mining rate<br>
+          ✓ Level 1 sponsor bonus to upline<br>
+          ✓ Active until you earn back PRO_PRICE
+        </div>
+        <div style="font-family:var(--mono);font-size:1.1rem;font-weight:700;margin-bottom:12px">0.001 ETH</div>
+        <button class="btn btn-primary btn-full" id="buyProBtn" onclick="doBuyPro()">Buy Pro License</button>
+      </div>
+      <div class="panel" style="border-color:rgba(245,166,35,0.25);background:linear-gradient(135deg,rgba(245,166,35,0.04),var(--surface))">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="section-title">Premium License</div>
+          <span class="badge badge-amber" id="premiumBadge">INACTIVE</span>
+        </div>
+        <div style="font-size:0.78rem;color:var(--text-dim);margin-bottom:14px;line-height:1.6">
+          ✓ +0.10% daily mining rate<br>
+          ✓ Sponsor bonuses up to 5 levels deep<br>
+          ✓ Highest tier — best for network builders
+        </div>
+        <div style="font-family:var(--mono);font-size:1.1rem;font-weight:700;margin-bottom:12px">0.001 ETH</div>
+        <button class="btn btn-amber btn-full" id="buyPremiumBtn" onclick="doBuyPremium()">Buy Premium License</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BOUNTY HUNTER ── -->
+  <div id="tab-bounty" style="display:none">
+    <div class="topbar">
+      <div><div class="page-title">Bounty <span>Hunter</span></div><div class="page-sub">Earn 10% on every deposit from your referrals</div></div>
+      <div class="topbar-right"><button class="btn btn-ghost" onclick="copyRefLink()">📋 Copy Referral Address</button></div>
+    </div>
+
+    <div class="grid-4" style="margin-bottom:20px">
+      <div class="stat-card amber"><div class="stat-eyebrow">Total Bounty Earned</div><div class="stat-value" id="bhTotal">—</div><div class="stat-delta">lifetime ETH</div></div>
+      <div class="stat-card green"><div class="stat-eyebrow">Reward Balance</div><div class="stat-value" id="bhPending">—</div><div class="stat-delta up">ready to withdraw</div></div>
+      <div class="stat-card"><div class="stat-eyebrow">Direct Referrals</div><div class="stat-value" id="bhRefs">—</div><div class="stat-delta">sponsored wallets</div></div>
+      <div class="stat-card"><div class="stat-eyebrow">Bounty Rate</div><div class="stat-value" style="color:var(--amber)">10%</div><div class="stat-delta">of referral deposits</div></div>
+    </div>
+
+    <div class="grid-main">
+      <div>
+        <div class="panel" style="border-color:rgba(245,166,35,0.18);background:linear-gradient(135deg,rgba(245,166,35,0.04),var(--surface))">
+          <div class="section-title" style="margin-bottom:14px">How It Works</div>
+          <div class="grid-3" style="gap:10px;margin-bottom:16px">
+            <div style="background:var(--surface2);border-radius:9px;padding:14px;text-align:center">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--amber-dim);border:1px solid rgba(245,166,35,0.3);display:grid;place-items:center;margin:0 auto 8px;font-size:1rem">📤</div>
+              <div style="font-weight:600;font-size:0.8rem;margin-bottom:3px">Share Your Address</div>
+              <div style="font-size:0.7rem;color:var(--text-dim)">Give your wallet address as the referrer param</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:9px;padding:14px;text-align:center">
+              <div style="width:32px;height:32px;border-radius:50%;background:var(--teal-dim);border:1px solid rgba(0,229,204,0.3);display:grid;place-items:center;margin:0 auto 8px;font-size:1rem">⬇️</div>
+              <div style="font-weight:600;font-size:0.8rem;margin-bottom:3px">They Deposit</div>
+              <div style="font-size:0.7rem;color:var(--text-dim)">Every time your referral calls deposit()</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:9px;padding:14px;text-align:center">
+              <div style="width:32px;height:32px;border-radius:50%;background:rgba(0,201,141,0.12);border:1px solid rgba(0,201,141,0.3);display:grid;place-items:center;margin:0 auto 8px;font-size:1rem">💰</div>
+              <div style="font-weight:600;font-size:0.8rem;margin-bottom:3px">You Earn 10%</div>
+              <div style="font-size:0.7rem;color:var(--text-dim)">Instantly credited to your reward balance</div>
+            </div>
+          </div>
+
+          <!-- Earnings calculator -->
+          <div style="background:var(--surface2);border-radius:8px;padding:13px">
+            <div style="font-size:0.68rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:10px">Earnings Calculator</div>
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:7px;font-size:0.8rem">
+                <span style="color:var(--text-dim)">Referral deposits</span>
+                <input id="bhCalcAmt" class="input" type="number" value="0.1" step="0.01" style="width:80px;padding:5px 9px;font-size:0.8rem" oninput="updateBHCalc()"/>
+                <span style="color:var(--text-dim)">ETH</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;font-size:0.8rem">
+                <span style="color:var(--text-dim)">×</span>
+                <input id="bhCalcRefs" class="input" type="number" value="5" style="width:55px;padding:5px 9px;font-size:0.8rem" oninput="updateBHCalc()"/>
+                <span style="color:var(--text-dim)">referrals</span>
+              </div>
+              <div style="background:var(--amber-dim);border:1px solid rgba(245,166,35,0.25);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:7px">
+                <span style="font-size:0.72rem;color:var(--text-dim)">You earn</span>
+                <span style="font-family:var(--mono);font-size:0.95rem;font-weight:700;color:var(--amber)" id="bhCalcResult">0.050 ETH</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-head">
+            <span class="section-title">Referral Activity</span>
+            <span class="badge badge-amber" id="bhRefCountBadge">0 referrals</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Wallet</th><th>Type</th><th>Their Deposit</th><th>Your Bounty</th><th>Status</th></tr></thead>
+              <tbody id="bountyTable">
+                <tr><td colspan="5" style="text-align:center;padding:28px;color:var(--text-dim)">Connect wallet to load referral history</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="panel" style="border-color:rgba(245,166,35,0.2)">
+          <div class="section-title" style="margin-bottom:10px">Your Referral Address</div>
+          <div style="background:var(--surface2);border-radius:7px;padding:11px;margin-bottom:10px;word-break:break-all;font-family:var(--mono);font-size:0.7rem;color:var(--text-dim)" id="refLinkFull">Connect wallet to generate</div>
+          <button class="btn btn-amber btn-full" onclick="copyRefLink()">📋 Copy Address</button>
+          <div style="font-size:0.68rem;color:var(--text-dim);margin-top:9px;text-align:center">Give this address as the _referrer parameter when others register or deposit</div>
+        </div>
+        <div class="panel">
+          <div class="section-title" style="margin-bottom:12px">Tier Benefits</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:var(--surface2);border-radius:8px;padding:11px;border:1px solid var(--border)">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-weight:600;font-size:0.82rem">Open Mining</span><span class="badge badge-amber" style="font-size:0.62rem">10 USDC</span></div>
+              <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.5">✓ 5% bounty on referral registrations<br>✗ No daily mining</div>
+            </div>
+            <div style="background:var(--teal-dim);border-radius:8px;padding:11px;border:1px solid rgba(0,229,204,0.2)">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px"><span style="font-weight:600;font-size:0.82rem">Miner100</span><span class="badge badge-teal" style="font-size:0.62rem">ACTIVE</span></div>
+              <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.5">✓ 0.10%+ daily rewards<br>✓ 10% bounty on referral deposits<br>✓ ES boosts + Pro/Premium licenses</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="section-title" style="margin-bottom:4px">Withdraw Bounty</div>
+          <div style="font-size:0.73rem;color:var(--text-dim);margin-bottom:10px">Bounty is in your reward balance</div>
+          <div style="display:flex;justify-content:space-between;font-size:0.82rem;background:var(--surface2);padding:10px 12px;border-radius:8px;margin-bottom:10px">
+            <span style="color:var(--text-dim)">Reward Balance</span>
+            <span class="td-mono" style="color:var(--teal)" id="bhRewardBal">—</span>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="showTab('rewards',null)">Go to Withdraw →</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ══ MODALS ══ -->
+<div class="overlay" id="txModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('txModal')">✕</button>
+    <div class="modal-title" id="txTitle">Confirm Transaction</div>
+    <div class="modal-sub" id="txSub"></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:13px;margin-bottom:16px;font-size:0.82rem" id="txDetails"></div>
+    <div style="display:flex;gap:9px">
+      <button class="btn btn-ghost" style="flex:1;justify-content:center" onclick="closeModal('txModal')">Cancel</button>
+      <button class="btn btn-primary" style="flex:1;justify-content:center" onclick="confirmTx()" id="txConfirmBtn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="walletModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('walletModal')">✕</button>
+    <div class="modal-title">Connect Wallet</div>
+    <div class="modal-sub">Connect to Sepolia testnet to interact with OpenMining V2</div>
+    <button class="btn btn-primary btn-full" onclick="connectMetaMask()" style="margin-bottom:9px">🦊 Connect MetaMask</button>
+    <div style="text-align:center;font-size:0.73rem;color:var(--text-dim)">Make sure you are on <strong style="color:var(--teal)">Sepolia Testnet</strong></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CONTRACT CONFIG — Replace with your deployed address
+// ═══════════════════════════════════════════════════
+const CONTRACT_ADDRESS = "0x0000000000000000000000000000000000000000"; // <-- PASTE YOUR ADDRESS HERE
+
+// FIX JS-7: Complete ABI including all functions + getUserInfo (not raw users())
+const CONTRACT_ABI = [
+  // Write functions
+  "function buyOpenMining(address referrer) external payable",
+  "function buyMiner100(address referrer) external payable",
+  "function deposit() external payable",
+  "function buyEnergySpeed() external payable",
+  "function buyProLicense() external payable",
+  "function buyPremiumLicense() external payable",
+  "function withdraw(uint256 amount) external",
+  // FIX JS-3: Use getUserInfo() instead of raw users() to avoid tuple index mismatch
+  // Returns: accountType, referrer, miningBalance, rewardBalance, totalMiningEarned,
+  //          lastUpdate, esCount, hasPro, hasPremium, directReferralCount, totalBountyEarned
+  "function getUserInfo(address user) external view returns (uint8, address, uint256, uint256, uint256, uint256, uint256, bool, bool, uint256, uint256)",
+  "function pendingReward(address user) external view returns (uint256)",
+  "function treasuryBalance() external view returns (uint256)",
+  "function totalMiningPower() external view returns (uint256)",
+  "function protectionMode() external view returns (bool)",
+  "function getCoverage() external view returns (uint256)",
+];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let provider, signer, contract;
+const state = {
+  account: null,
+  selectedType: "Miner100",
+  user: null,
+  treasuryBal: 0n,
+  totalPower:  0n,
+  coverage:    0n,
+  protection:  false,
+};
+
+// ═══════════════════════════════════════════════════
+// WALLET
+// ═══════════════════════════════════════════════════
+function connectWallet() {
+  if (!window.ethereum) { showToast("MetaMask not detected","error"); return; }
+  openModal("walletModal");
+}
+
+async function connectMetaMask() {
+  closeModal("walletModal");
+  if (!window.ethereum) { showToast("Install MetaMask","error"); return; }
+  try {
+    const accounts = await window.ethereum.request({ method:"eth_requestAccounts" });
+    const chainId  = await window.ethereum.request({ method:"eth_chainId" });
+    if (chainId !== "0xaa36a7") {
+      await window.ethereum.request({
+        method:"wallet_switchEthereumChain",
+        params:[{ chainId:"0xaa36a7" }]
+      });
+    }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    state.account = accounts[0];
+    updateWalletUI();
+    showToast("Wallet connected","success");
+    await loadUserData();
+  } catch(e) {
+    showToast(e.message ? e.message.slice(0,80) : "Connection failed","error");
+  }
+}
+
+function updateWalletUI() {
+  const dot  = document.getElementById("walletDot");
+  const addr = document.getElementById("walletAddr");
+  if (state.account) {
+    dot.style.background  = "var(--green)";
+    dot.style.boxShadow   = "0 0 8px var(--green)";
+    addr.innerText        = state.account.slice(0,6)+"..."+state.account.slice(-4);
+  } else {
+    dot.style.background  = "#6B7A94";
+    dot.style.boxShadow   = "none";
+    addr.innerText        = "Connect Wallet";
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// DATA LOADING
+// FIX JS-3: Uses getUserInfo() with correct tuple indices
+// ═══════════════════════════════════════════════════
+async function loadUserData() {
+  if (!contract || !state.account) return;
+  try {
+    // FIX JS-3: getUserInfo returns named fields in correct order
+    const info = await contract.getUserInfo(state.account);
+    state.user = {
+      accountType:         Number(info[0]),   // 0=None 1=OpenMining 2=Miner100
+      referrer:            info[1],
+      miningBalance:       info[2],           // BigInt wei
+      rewardBalance:       info[3],           // BigInt wei
+      totalMiningEarned:   info[4],           // BigInt wei
+      lastUpdate:          Number(info[5]),
+      esCount:             Number(info[6]),
+      hasPro:              info[7],           // bool
+      hasPremium:          info[8],           // bool
+      directReferralCount: Number(info[9]),
+      totalBountyEarned:   info[10],          // BigInt wei
+    };
+    state.treasuryBal = await contract.treasuryBalance();
+    state.totalPower  = await contract.totalMiningPower();
+    state.coverage    = await contract.getCoverage();
+    state.protection  = await contract.protectionMode();
+    refreshUI();
+  } catch(e) {
+    console.error("loadUserData error:", e);
+    showToast("Failed to load data: " + (e.reason || e.message?.slice(0,60)), "error");
+  }
+}
+
+async function refreshData() {
+  if (!state.account) { showToast("Connect wallet first","warn"); return; }
+  await loadUserData();
+  showToast("Data refreshed","success");
+}
+
+// ═══════════════════════════════════════════════════
+// UI REFRESH
+// ═══════════════════════════════════════════════════
+function fmtEth(wei) {
+  if (wei === undefined || wei === null) return "—";
+  return parseFloat(ethers.formatEther(wei)).toFixed(5);
+}
+
+function refreshUI() {
+  const u = state.user;
+  if (!u) return;
+
+  const miningBal = u.miningBalance;
+  const rewardBal = u.rewardBalance;
+  const treasury  = state.treasuryBal;
+  const power     = state.totalPower;
+  const coverage  = Number(state.coverage);
+
+  // ── Treasury ring ──
+  const pct  = Math.min(coverage, 100);
+  const circ = 2 * Math.PI * 65;
+  const ring = document.getElementById("ringFill");
+  if (ring) {
+    ring.style.strokeDasharray  = circ;
+    ring.style.strokeDashoffset = circ * (1 - pct / 100);
+    if (coverage < 10)      { ring.style.stroke = "var(--red)";   ring.style.filter = "drop-shadow(0 0 5px var(--red))"; }
+    else if (coverage < 30) { ring.style.stroke = "var(--amber)"; ring.style.filter = "drop-shadow(0 0 5px var(--amber))"; }
+    else                    { ring.style.stroke = "var(--teal)";  ring.style.filter = "drop-shadow(0 0 5px var(--teal))"; }
+  }
+  setText("ringPct",    Math.floor(pct) + "%");
+  setText("treasuryBal", fmtEth(treasury) + " ETH");
+
+  const sb = document.getElementById("systemStatus");
+  if (sb) {
+    if (coverage >= 30)      { sb.className = "badge badge-green"; sb.innerHTML = '<span class="badge-dot"></span> HEALTHY'; }
+    else if (coverage >= 10) { sb.className = "badge badge-amber"; sb.innerHTML = '<span class="badge-dot"></span> AT RISK'; }
+    else                     { sb.className = "badge badge-red";   sb.innerHTML = '<span class="badge-dot"></span> CRITICAL'; }
+  }
+
+  // ── Protection banner ──
+  const banner = document.getElementById("protectionBanner");
+  if (banner) banner.style.display = state.protection ? "flex" : "none";
+
+  // ── Stats ──
+  const esCount   = u.esCount;
+  const hasPro    = u.hasPro;
+  const hasPremium= u.hasPremium;
+  const licBonus  = (hasPro ? 1 : 0) + (hasPremium ? 1 : 0);
+  const dailyRate = (0.1 + esCount * 0.1 + licBonus * 0.1).toFixed(2);
+
+  setText("statMining",  fmtEth(miningBal));
+  setText("statRewards", fmtEth(rewardBal));
+  setText("statRate",    dailyRate + "%");
+  setText("statES",      esCount + " / 5");
+  setText("statRefs",    u.directReferralCount);
+  setText("statEarned",  fmtEth(u.totalMiningEarned));
+
+  // ── Cap progress ──
+  const capWei   = miningBal * 2n;
+  const earnedN  = Number(ethers.formatEther(u.totalMiningEarned));
+  const capN     = Number(ethers.formatEther(capWei));
+  const capPct   = capN > 0 ? Math.min((earnedN / capN) * 100, 100) : 0;
+  const el = document.getElementById("capProgress");
+  if (el) el.style.width = capPct + "%";
+  setText("capMeta", fmtEth(u.totalMiningEarned) + " / " + fmtEth(capWei) + " ETH");
+
+  // ── Account overview ──
+  const typeNames = {0:"None", 1:"Open Mining", 2:"Miner100"};
+  const typeBadge = document.getElementById("acctTypeBadge");
+  if (typeBadge) {
+    typeBadge.className = "badge " + (u.accountType === 2 ? "badge-teal" : u.accountType === 1 ? "badge-amber" : "");
+    typeBadge.innerText = typeNames[u.accountType] || "None";
+  }
+  setText("proStatus",     hasPro     ? "✓ Active" : "✗ Inactive");
+  setText("premiumStatus", hasPremium ? "✓ Active" : "✗ Inactive");
+  setText("referrerAddr",  u.referrer !== ethers.ZeroAddress ? u.referrer.slice(0,10)+"..." : "None");
+
+  // ── Mining tab ──
+  setText("esBonusLabel",  "+" + (esCount * 0.1).toFixed(2) + "%");
+  setText("licBonusLabel", "+" + (licBonus * 0.1).toFixed(2) + "%");
+  const rateBar = document.getElementById("rateBar");
+  if (rateBar) rateBar.style.width = Math.min((parseFloat(dailyRate) / 0.5) * 100, 100) + "%";
+  setText("claimableAmt",  fmtEth(rewardBal) + " ETH");
+  setText("sumMining",     fmtEth(miningBal) + " ETH");
+  setText("sumCap",        fmtEth(capWei)    + " ETH");
+  setText("sumEarned",     fmtEth(u.totalMiningEarned) + " ETH");
+  setText("sumPro",        hasPro     ? "✓ Active" : "✗ None");
+  setText("sumPremium",    hasPremium ? "✓ Active" : "✗ None");
+
+  // ── Rewards tab ──
+  setText("rewardBig",  fmtEth(rewardBal));
+  updateWithdrawNet();
+
+  // ── Energy tab ──
+  setText("esCurrentCount", esCount);
+  setText("esBoostCurrent", "+" + (esCount * 0.1).toFixed(2) + "%");
+
+  // ── Licenses tab ──
+  const proBadge     = document.getElementById("proBadge");
+  const premiumBadge = document.getElementById("premiumBadge");
+  const buyProBtn    = document.getElementById("buyProBtn");
+  const buyPremBtn   = document.getElementById("buyPremiumBtn");
+  if (proBadge)  { proBadge.className  = "badge " + (hasPro     ? "badge-teal"  : "badge-red"); proBadge.innerText  = hasPro     ? "ACTIVE" : "INACTIVE"; }
+  if (premiumBadge){ premiumBadge.className = "badge " + (hasPremium ? "badge-amber" : "badge-red"); premiumBadge.innerText = hasPremium ? "ACTIVE" : "INACTIVE"; }
+  if (buyProBtn)  buyProBtn.disabled  = hasPro;
+  if (buyPremBtn) buyPremBtn.disabled = hasPremium;
+
+  // ── Bounty tab ──
+  setText("bhTotal",       fmtEth(u.totalBountyEarned) + " ETH");
+  setText("bhPending",     fmtEth(rewardBal) + " ETH");
+  setText("bhRefs",        u.directReferralCount);
+  setText("bhRewardBal",   fmtEth(rewardBal) + " ETH");
+  const bhRefBadge = document.getElementById("bhRefCountBadge");
+  if (bhRefBadge) bhRefBadge.innerText = u.directReferralCount + " referral" + (u.directReferralCount !== 1 ? "s" : "");
+  const refEl = document.getElementById("refLinkFull");
+  if (refEl && state.account) refEl.innerText = state.account;
+
+  updateESGrids();
+  updateDepositAlloc();
+}
+
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.innerText = val;
+}
+
+function updateESGrids() {
+  const count = state.user?.esCount || 0;
+  ["esGrid","esGridEnergy"].forEach(gridId => {
+    const g = document.getElementById(gridId);
+    if (!g) return;
+    g.innerHTML = "";
+    for (let i = 0; i < 5; i++) {
+      const d = document.createElement("div");
+      d.className = "es-slot" + (i < count ? " active" : "");
+      d.innerText = i < count ? "⚡" : (i + 1);
+      g.appendChild(d);
+    }
+  });
+}
+
+function updateDepositAlloc() {
+  const amt = parseFloat(document.getElementById("depositAmt")?.value) || 0;
+  setText("alloc75", (amt * 0.75).toFixed(4) + " ETH");
+  setText("alloc10", (amt * 0.10).toFixed(4) + " ETH");
+}
+
+function updateWithdrawNet() {
+  const amt    = parseFloat(document.getElementById("withdrawAmt")?.value) || 0;
+  const net    = Math.max(0, amt - 0.0001);
+  setText("withdrawNet", net.toFixed(4) + " ETH");
+}
+
+function updateBHCalc() {
+  const amt  = parseFloat(document.getElementById("bhCalcAmt")?.value)  || 0;
+  const refs = parseFloat(document.getElementById("bhCalcRefs")?.value) || 0;
+  setText("bhCalcResult", (amt * 0.1 * refs).toFixed(4) + " ETH");
+}
+
+// Wire withdraw net live
+document.addEventListener("DOMContentLoaded", () => {
+  const wa = document.getElementById("withdrawAmt");
+  if (wa) wa.addEventListener("input", updateWithdrawNet);
+});
+
+// ═══════════════════════════════════════════════════
+// TRANSACTION WRAPPER
+// ═══════════════════════════════════════════════════
+async function sendTx(label, txFn) {
+  if (!contract) { showToast("Connect wallet first","error"); return; }
+  if (state.protection && !["doWithdrawFromInput","doWithdrawFromInput"].includes(label)) {
+    showToast("Protection mode active","error"); return;
+  }
+  const btn = document.getElementById("txConfirmBtn");
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Sending...'; }
+  try {
+    const tx = await txFn();
+    showToast("Transaction sent — confirming...","warn");
+    await tx.wait();
+    showToast(label + " confirmed!","success");
+    await loadUserData();
+  } catch(e) {
+    const msg = e.reason || e.data?.message || e.message || "Transaction failed";
+    showToast(msg.slice(0,90),"error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = "Confirm"; }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════════════
+
+// FIX JS-5: Correct ethers.js v6 call syntax — options object is last arg
+function doRegister() {
+  if (!state.account) { openModal("walletModal"); return; }
+  const ref    = document.getElementById("regRef").value.trim() || ethers.ZeroAddress;
+  const isMiner = state.selectedType === "Miner100";
+  const price  = ethers.parseEther("0.001");
+  showTxModal(
+    isMiner ? "Register as Miner100" : "Register as Open Mining",
+    "0.001 ETH will be charged",
+    `<div style="display:flex;flex-direction:column;gap:7px">
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Type</span><strong>${state.selectedType}</strong></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Cost</span><strong>0.001 ETH</strong></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Referrer</span><span style="font-family:var(--mono);font-size:0.7rem">${ref.slice(0,16)}...</span></div>
+    </div>`,
+    // FIX JS-5: contract.buyMiner100(referrer, {value: ...}) — options is 2nd arg
+    () => sendTx("Register", () => isMiner
+      ? contract.buyMiner100(ref,   { value: price })
+      : contract.buyOpenMining(ref, { value: price })
+    )
+  );
+}
+
+function doDeposit() {
+  if (!state.account) { openModal("walletModal"); return; }
+  const amt = document.getElementById("depositAmt").value;
+  if (!amt || parseFloat(amt) <= 0) { showToast("Enter a valid amount","error"); return; }
+  const wei = ethers.parseEther(amt);
+  showTxModal("Deposit " + amt + " ETH","Adds to your mining balance",
+    `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Amount</span><strong>${amt} ETH</strong></div>`,
+    () => sendTx("Deposit", () => contract.deposit({ value: wei }))
+  );
+}
+
+// FIX JS-2: claimMining no longer calls withdraw(0)
+// Instead withdraws the full reward balance
+function doClaimRewards() {
+  if (!state.account) { openModal("walletModal"); return; }
+  const rewardBal = state.user?.rewardBalance || 0n;
+  const fee       = ethers.parseEther("0.0001");
+  if (rewardBal <= fee) { showToast("Reward balance too low to cover fee","error"); return; }
+  const withdrawAmt = rewardBal - fee;  // net amount (fee deducted from rewardBalance in contract)
+  showTxModal("Claim All Rewards","Withdraw your full reward balance",
+    `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">You receive</span><strong style="color:var(--teal)">${fmtEth(withdrawAmt)} ETH</strong></div>`,
+    // FIX JS-4: contract.withdraw() expects the amount you want to receive
+    () => sendTx("Claim Rewards", () => contract.withdraw(withdrawAmt))
+  );
+}
+
+// FIX JS-2 + JS-4: Correct withdraw — user types what they want to receive
+function doWithdrawFromInput(inputId) {
+  if (!state.account) { openModal("walletModal"); return; }
+  const amt = parseFloat(document.getElementById(inputId)?.value || "0");
+  if (amt <= 0) { showToast("Enter a valid amount","error"); return; }
+  if (amt < 0.0001) { showToast("Minimum 0.0001 ETH","error"); return; }
+  const rewardBal = state.user?.rewardBalance || 0n;
+  const fee       = ethers.parseEther("0.0001");
+  const netWei    = ethers.parseEther(amt.toFixed(6));
+  // contract.withdraw(amount) deducts amount + WITHDRAWAL_FEE from rewardBalance
+  const totalNeeded = netWei + fee;
+  if (totalNeeded > rewardBal) { showToast("Insufficient reward balance","error"); return; }
+  showTxModal("Withdraw " + amt + " ETH","Fee: 0.0001 ETH",
+    `<div style="display:flex;flex-direction:column;gap:7px">
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">You receive</span><strong style="color:var(--teal)">${amt} ETH</strong></div>
+      <div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Fee</span><span style="color:var(--amber)">0.0001 ETH</span></div>
+    </div>`,
+    () => sendTx("Withdraw", () => contract.withdraw(netWei))
+  );
+}
+
+function doBuyES() {
+  if (!state.account) { openModal("walletModal"); return; }
+  const esCount = state.user?.esCount || 0;
+  if (esCount >= 5) { showToast("Maximum 5 ES slots reached","error"); return; }
+  showTxModal("Buy Energy Speed Slot","0.001 ETH — adds +0.10% daily rate",
+    `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">New rate boost</span><strong>+${((esCount+1)*0.1).toFixed(2)}% / day</strong></div>`,
+    () => sendTx("Buy ES", () => contract.buyEnergySpeed({ value: ethers.parseEther("0.001") }))
+  );
+}
+
+function doBuyPro() {
+  if (!state.account) { openModal("walletModal"); return; }
+  if (state.user?.hasPro) { showToast("Already have Pro license","error"); return; }
+  showTxModal("Buy Pro License","0.001 ETH — +0.10% daily rate",
+    `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Cost</span><strong>0.001 ETH</strong></div>`,
+    () => sendTx("Buy Pro", () => contract.buyProLicense({ value: ethers.parseEther("0.001") }))
+  );
+}
+
+function doBuyPremium() {
+  if (!state.account) { openModal("walletModal"); return; }
+  if (state.user?.hasPremium) { showToast("Already have Premium license","error"); return; }
+  showTxModal("Buy Premium License","0.001 ETH — +0.10% daily + 5-level sponsor bonus",
+    `<div style="display:flex;justify-content:space-between"><span style="color:var(--text-dim)">Cost</span><strong>0.001 ETH</strong></div>`,
+    () => sendTx("Buy Premium", () => contract.buyPremiumLicense({ value: ethers.parseEther("0.001") }))
+  );
+}
+
+function doP2P() {
+  showToast("P2P transfer: add p2pTransfer() to contract for ETH version","warn");
+}
+
+function copyRefLink() {
+  if (!state.account) { showToast("Connect wallet first","error"); return; }
+  navigator.clipboard.writeText(state.account)
+    .then(() => showToast("Referral address copied!","success"))
+    .catch(() => showToast("Copy failed — copy manually from the Bounty Hunter tab","error"));
+}
+
+// ═══════════════════════════════════════════════════
+// TYPE SELECTION
+// ═══════════════════════════════════════════════════
+function selectType(t) {
+  state.selectedType = t;
+  document.getElementById("typeOpenMining").classList.toggle("selected", t === "OpenMining");
+  document.getElementById("typeMiner").classList.toggle("selected", t === "Miner100");
+}
+
+// ═══════════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════════
+const TABS = ["dashboard","mining","rewards","register","deposit","energy","licenses","bounty"];
+function showTab(id, el) {
+  TABS.forEach(t => { const e = document.getElementById("tab-" + t); if (e) e.style.display = "none"; });
+  const target = document.getElementById("tab-" + id);
+  if (target) target.style.display = "";
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  if (el && el.classList) el.classList.add("active");
+}
+
+// ═══════════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════════
+function openModal(id)  { const e = document.getElementById(id); if (e) e.classList.add("open"); }
+function closeModal(id) { const e = document.getElementById(id); if (e) e.classList.remove("open"); }
+document.querySelectorAll(".overlay").forEach(o => {
+  o.addEventListener("click", e => { if (e.target === o) o.classList.remove("open"); });
+});
+
+let pendingTxFn = null;
+function showTxModal(title, sub, details, fn) {
+  document.getElementById("txTitle").innerText   = title;
+  document.getElementById("txSub").innerText     = sub;
+  document.getElementById("txDetails").innerHTML = details;
+  pendingTxFn = fn;
+  openModal("txModal");
+}
+function confirmTx() { closeModal("txModal"); if (pendingTxFn) pendingTxFn(); pendingTxFn = null; }
+
+// ═══════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════
+function showToast(msg, type = "success") {
+  const wrap = document.getElementById("toasts");
+  const t    = document.createElement("div");
+  t.className = "toast " + type;
+  const icons = { success:"✓", warn:"⚠", error:"✕" };
+  const colors = { success:"var(--green)", warn:"var(--amber)", error:"var(--red)" };
+  t.innerHTML = `<span style="color:${colors[type]||colors.success};font-weight:700">${icons[type]||"i"}</span>${msg}`;
+  wrap.appendChild(t);
+  setTimeout(() => { t.style.transition = "opacity 0.3s"; t.style.opacity = "0"; setTimeout(() => t.remove(), 300); }, 4000);
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+window.addEventListener("load", () => {
+  updateDepositAlloc();
+  updateBHCalc();
+  updateESGrids();
+
+  if (window.ethereum) {
+    window.ethereum.request({ method:"eth_accounts" }).then(accounts => {
+      if (accounts.length > 0) connectMetaMask();
+    }).catch(() => {});
+
+    window.ethereum.on("accountsChanged", accounts => {
+      state.account = accounts[0] || null;
+      updateWalletUI();
+      if (state.account) loadUserData();
+    });
+    window.ethereum.on("chainChanged", () => window.location.reload());
+  }
+});
+</script>
+</body>
+</html>
